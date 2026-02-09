@@ -37,7 +37,11 @@ public partial class App : Application
             _audioRecorder = new AudioRecorderService();
             _audioRecorder.MaxDurationReached += () =>
             {
-                Dispatcher.BeginInvoke(async () => await StopAndTranscribe());
+                Dispatcher.BeginInvoke(async () =>
+                {
+                    _hotkeyService?.UnregisterCancelHotkey();
+                    await StopAndTranscribe();
+                });
             };
 
             _whisperService = new WhisperTranscriptionService(
@@ -74,6 +78,10 @@ public partial class App : Application
             {
                 Dispatcher.BeginInvoke(async () => await OnHotkeyPressed());
             };
+            _hotkeyService.CancelPressed += () =>
+            {
+                Dispatcher.BeginInvoke(CancelRecording);
+            };
 
             if (!_hotkeyService.Register(_settings.Hotkey))
             {
@@ -96,13 +104,26 @@ public partial class App : Application
         if (!_isRecording)
         {
             _isRecording = true;
+            _hotkeyService?.RegisterCancelHotkey();
             _audioRecorder?.StartRecording(_settings.MaxRecordingSeconds);
-            UpdateTrayState("Recording...", TrayState.Recording);
+            UpdateTrayState("Recording... (Esc to cancel)", TrayState.Recording);
         }
         else
         {
+            _hotkeyService?.UnregisterCancelHotkey();
             await StopAndTranscribe();
         }
+    }
+
+    private void CancelRecording()
+    {
+        if (!_isRecording) return;
+
+        _isRecording = false;
+        _hotkeyService?.UnregisterCancelHotkey();
+        _audioRecorder?.StopRecording(); // discard the audio
+        UpdateTrayState("Ready", TrayState.Idle);
+        ShowNotification("Voice to Clipboard", "Recording cancelled.");
     }
 
     private async Task StopAndTranscribe()

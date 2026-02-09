@@ -6,6 +6,11 @@ public class HotkeyService : IDisposable
 {
     private const int WM_HOTKEY = 0x0312;
     private const int HOTKEY_ID = 9000;
+    private const int CANCEL_HOTKEY_ID = 9001;
+    private const uint VK_ESCAPE = 0x1B;
+    private const uint WM_USER = 0x0400;
+    private const uint WM_REGISTER_CANCEL = WM_USER + 1;
+    private const uint WM_UNREGISTER_CANCEL = WM_USER + 2;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -89,12 +94,25 @@ public class HotkeyService : IDisposable
     private const uint WM_CLOSE = 0x0010;
 
     public event Action? HotkeyPressed;
+    public event Action? CancelPressed;
 
     private IntPtr _hwnd;
     private Thread? _messageThread;
     private volatile bool _disposed;
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     private WndProcDelegate? _wndProcDelegate; // prevent GC
+
+    public void RegisterCancelHotkey()
+    {
+        if (_hwnd != IntPtr.Zero)
+            PostMessage(_hwnd, WM_REGISTER_CANCEL, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    public void UnregisterCancelHotkey()
+    {
+        if (_hwnd != IntPtr.Zero)
+            PostMessage(_hwnd, WM_UNREGISTER_CANCEL, IntPtr.Zero, IntPtr.Zero);
+    }
 
     public bool Register(string hotkeyString)
     {
@@ -140,15 +158,35 @@ public class HotkeyService : IDisposable
             DispatchMessage(ref msg);
         }
 
+        UnregisterHotKey(_hwnd, CANCEL_HOTKEY_ID);
         UnregisterHotKey(_hwnd, HOTKEY_ID);
         DestroyWindow(_hwnd);
     }
 
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+        if (msg == WM_HOTKEY)
         {
-            HotkeyPressed?.Invoke();
+            var id = wParam.ToInt32();
+            if (id == HOTKEY_ID)
+            {
+                HotkeyPressed?.Invoke();
+                return IntPtr.Zero;
+            }
+            if (id == CANCEL_HOTKEY_ID)
+            {
+                CancelPressed?.Invoke();
+                return IntPtr.Zero;
+            }
+        }
+        else if (msg == WM_REGISTER_CANCEL)
+        {
+            RegisterHotKey(hWnd, CANCEL_HOTKEY_ID, (uint)Modifiers.NoRepeat, VK_ESCAPE);
+            return IntPtr.Zero;
+        }
+        else if (msg == WM_UNREGISTER_CANCEL)
+        {
+            UnregisterHotKey(hWnd, CANCEL_HOTKEY_ID);
             return IntPtr.Zero;
         }
         return DefWindowProc(hWnd, msg, wParam, lParam);
