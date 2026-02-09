@@ -11,6 +11,8 @@ All transcription happens **offline** — no data leaves your machine.
 3. Press **Ctrl+Alt+R** again to stop (tray icon turns orange while transcribing)
 4. The transcribed text is copied to your clipboard — just **Ctrl+V** to paste
 
+Press **Escape** at any time during recording to cancel — the audio is discarded and no transcription occurs.
+
 ## Requirements
 
 - Windows 10 (build 19041+) or later
