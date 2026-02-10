@@ -17,6 +17,7 @@ public partial class App : Application
     private WhisperTranscriptionService? _whisperService;
     private HotkeyService? _hotkeyService;
     private TaskbarIcon? _trayIcon;
+    private CursorOverlayWindow? _cursorOverlay;
     private bool _isRecording;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -88,6 +89,8 @@ public partial class App : Application
                 ShowNotification("Hotkey Error", $"Failed to register {_settings.Hotkey}. It may be in use by another app.");
             }
 
+            _cursorOverlay = new CursorOverlayWindow();
+
             UpdateTrayState("Ready", TrayState.Idle);
             ShowNotification("Voice to Clipboard", $"Ready! Press {_settings.Hotkey} to start recording.");
         }
@@ -107,6 +110,7 @@ public partial class App : Application
             _hotkeyService?.RegisterCancelHotkey();
             _audioRecorder?.StartRecording(_settings.MaxRecordingSeconds);
             UpdateTrayState("Recording... (Esc to cancel)", TrayState.Recording);
+            _cursorOverlay?.ShowRecording();
         }
         else
         {
@@ -122,6 +126,7 @@ public partial class App : Application
         _isRecording = false;
         _hotkeyService?.UnregisterCancelHotkey();
         _audioRecorder?.StopRecording(); // discard the audio
+        _cursorOverlay?.HideOverlay();
         UpdateTrayState("Ready", TrayState.Idle);
         ShowNotification("Voice to Clipboard", "Recording cancelled.");
     }
@@ -135,9 +140,11 @@ public partial class App : Application
         Log($"[VTC] Audio captured: {audioData.Length} samples ({durationSec:F1}s)");
 
         UpdateTrayState("Transcribing...", TrayState.Transcribing);
+        _cursorOverlay?.ShowTranscribing();
 
         if (audioData.Length == 0)
         {
+            _cursorOverlay?.HideOverlay();
             ShowNotification("Voice to Clipboard", "No audio captured.");
             UpdateTrayState("Ready", TrayState.Idle);
             return;
@@ -165,6 +172,7 @@ public partial class App : Application
             ShowNotification("Transcription Error", ex.Message);
         }
 
+        _cursorOverlay?.ShowDone();
         UpdateTrayState("Ready", TrayState.Idle);
     }
 
